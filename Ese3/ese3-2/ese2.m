@@ -46,13 +46,24 @@ righeErroreMinimo = find(erroriCoefficienti == erroreMinimo);
 %  - Differenze divise - %
 xPunti = puntiDati(1, :);
 yPunti = puntiDati(2, :);
-numPunti = numel(xPunti);s
+numPunti = numel(xPunti);
 
 differenzeDivise = diffDivise(xPunti, yPunti)
 
 % Interpolazione di sesto grado
 coefficientiNewtonCompleto = differenzeDivise(1, :);
+syms x
+polNewtonCompletoSym = sym(0);
+termineNewton = sym(1);
 
+for k = 1:numPunti
+    polNewtonCompletoSym = polNewtonCompletoSym + ...
+        differenzeDivise(1, k) * termineNewton;
+    termineNewton = termineNewton * (x - xPunti(k));
+end
+
+polNewtonCompletoSym = expand(polNewtonCompletoSym);
+fprintf("Polinomio di Newton completo:\n"); pretty(polNewtonCompletoSym);
 
 % Interpolazione a tratti ogni tre punti, di secondo grado
 % Terza colonna, coefficienti alterni
@@ -82,15 +93,24 @@ for k = 1:numel(startIdx)
     args{2 * k} = polTratto;
 end
 
-args{end} = sym(0);   % valore "otherwise"
+args{end} = sym(NaN);   % valore fuori dall'intervallo
 polNewtonTrattiSym = piecewise(args{:});
-pretty(polNewtonTrattiSym);
+fprintf("Polinomio di Newton a tratti:\n"); pretty(polNewtonTrattiSym);
 
 %% Grafici
+paddingXLim = 1;
+
+% -- Interpolazioni a confronto --
 figure;
-xq = linspace(min(xPunti), max(xPunti), 500);
-plot(xq, double(subs(polNewtonTrattiSym,x,xq)));
+xq = linspace(min(xPunti)-paddingXLim, max(xPunti)+paddingXLim, 500);
+graf2a1 = plot(xq, double(subs(polNewtonTrattiSym,x,xq)), 'r-', LineWidth=2); % Polinomio a tratti Newton
 hold on;
-% plot(xq, double(subs(polNewtonPrint,x,xq)), "r-", LineWidth=2);
+graf2a2 = plot(xq, double(subs(polNewtonCompletoSym,x,xq)), 'b-', LineWidth=1); % Polinomio Newton completo
+graf2a3 = plot(xq, interp1(xPunti, yPunti, xq, "linear"), "g-", LineWidth=1.3); % Spline lineare
+graf2a4 = plot(xq, interp1(xPunti, yPunti, xq, "spline"), "c-", LineWidth=3); % Spline cubica (??)
+
 plot(xPunti, yPunti, ".k", MarkerSize=15);
+
+ylim([1.25 2.5]);
+grid on; grid minor;
 hold off;
