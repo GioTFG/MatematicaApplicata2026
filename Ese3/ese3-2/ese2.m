@@ -1,5 +1,5 @@
 %% -- Esercitazione 3 -- %%
-% - Esercizio 1 - %
+% - Esercizio 2 - %
 
 % -- Pulizia del workspace --
 clear; clc; close all;
@@ -10,24 +10,14 @@ puntiDati = [
     2.31, 2.01, 1.80, 1.66, 1.55, 1.47, 1.41
 ];
 
-%TODO:
-% - Inserire polinomio di Newton completo giusto per completezza
-% - Aggiustare approssimazione polinomiale Newton a tratti ogni 3 punti
-% (Hermite).
-% - Approssimazione con spline lineare (??? Non è una parabola)
-% - Approssimazione con spline cubica normale (??? Non è una parabola)
-% --> Spline quadratica
-% - Trovare alpha, beta, gamma sperimentalmente 
-
-% -- Valori di alpha, beta, gamma per le 35 combinazioni di 3 punti tra i 7 dati --
-
+%% -- Valori di alpha, beta, gamma per le 35 combinazioni di 3 punti tra i 7 dati --
 % - Generazione delle combinazioni di tre punti - %
 combinazioniPunti = nchoosek(1:size(puntiDati, 2), 3);
 numCombinazioni = size(combinazioniPunti, 1);
 coefficienti = zeros(numCombinazioni, 3);
 erroriCoefficienti = zeros(numCombinazioni, 1);
 
-%% - Calcolo dei coefficienti per ogni combinazione di tre punti - %
+% - Calcolo dei coefficienti per ogni combinazione di tre punti - %
 for indiceCombinazione = 1:numCombinazioni
     indici = combinazioniPunti(indiceCombinazione, :);
     coefficienti(indiceCombinazione, :) = polyfit(puntiDati(1, indici), puntiDati(2, indici), 2);
@@ -40,7 +30,12 @@ end
 erroreMinimo = min(erroriCoefficienti);
 righeErroreMinimo = find(erroriCoefficienti == erroreMinimo);
 
-%[righeErroreMinimo, coefficienti(righeErroreMinimo, :), erroriCoefficienti(righeErroreMinimo)]
+syms x
+coeffMinimi = coefficienti(righeErroreMinimo(1), :);
+polErroreMinimo = expand(poly2sym(coeffMinimi, x));
+
+fprintf("Polinomio di secondo grado trovato con imposizione del passaggio (di errore minimo):\n");
+pretty(polErroreMinimo);
 
 %% -- Approssimazione polinomiale di Newton -- %
 %  - Differenze divise - %
@@ -52,7 +47,6 @@ differenzeDivise = diffDivise(xPunti, yPunti)
 
 % Interpolazione di sesto grado
 coefficientiNewtonCompleto = differenzeDivise(1, :);
-syms x
 polNewtonCompletoSym = sym(0);
 termineNewton = sym(1);
 
@@ -63,7 +57,7 @@ for k = 1:numPunti
 end
 
 polNewtonCompletoSym = expand(polNewtonCompletoSym);
-fprintf("Polinomio di Newton completo:\n"); pretty(polNewtonCompletoSym);
+fprintf("Polinomio di Newton completo:\n"); pretty(polNewtonCompletoSym); pretty(vpa(polNewtonCompletoSym, 3));
 
 % Interpolazione a tratti ogni tre punti, di secondo grado
 % Terza colonna, coefficienti alterni
@@ -95,7 +89,20 @@ end
 
 args{end} = sym(NaN);   % valore fuori dall'intervallo
 polNewtonTrattiSym = piecewise(args{:});
-fprintf("Polinomio di Newton a tratti:\n"); pretty(polNewtonTrattiSym);
+fprintf("Polinomio di Newton a tratti:\n"); pretty(polNewtonTrattiSym); pretty(vpa(polNewtonTrattiSym, 3));
+
+%% Valutazione dei risultati sui punti intermedi
+xPuntiIntermedi = xPunti(1:end-1) + 0.5;
+
+valutazioniPuntiIntermedi = [
+    xPuntiIntermedi;
+    double(subs(polErroreMinimo, x, xPuntiIntermedi));
+    double(subs(polNewtonCompletoSym, x, xPuntiIntermedi));
+    double(subs(polNewtonTrattiSym, x, xPuntiIntermedi));
+    spline(xPunti, yPunti, xPuntiIntermedi(:).')
+]';
+distanzeMaggioriValPtiIntermedi = max(valutazioniPuntiIntermedi(:, 2:end), [], 2) - ...
+    min(valutazioniPuntiIntermedi(:, 2:end), [], 2)
 
 %% Grafici
 paddingXLim = 1;
@@ -103,13 +110,24 @@ paddingXLim = 1;
 % -- Interpolazioni a confronto --
 figure;
 xq = linspace(min(xPunti)-paddingXLim, max(xPunti)+paddingXLim, 500);
-graf2a1 = plot(xq, double(subs(polNewtonTrattiSym,x,xq)), 'r-', LineWidth=2); % Polinomio a tratti Newton
+graf2a1 = plot(xq, (subs(polNewtonTrattiSym,x,xq)), 'r-', LineWidth=3); % Polinomio a tratti Newton
 hold on;
-graf2a2 = plot(xq, double(subs(polNewtonCompletoSym,x,xq)), 'b-', LineWidth=1); % Polinomio Newton completo
-graf2a3 = plot(xq, interp1(xPunti, yPunti, xq, "linear"), "g-", LineWidth=1.3); % Spline lineare
-graf2a4 = plot(xq, interp1(xPunti, yPunti, xq, "spline"), "c-", LineWidth=3); % Spline cubica (??)
+graf2a2 = plot(xq, (subs(polNewtonCompletoSym,x,xq)), 'b-', LineWidth=1.8); % Polinomio Newton completo
+graf2a3 = plot(xq, interp1(xPunti, yPunti, xq, "linear"), "g-", LineWidth=1.8); % Spline lineare
+graf2a4 = plot(xq, (subs(polErroreMinimo,x,xq)), "m:", LineWidth=2.5); % Polinomio con alpha,beta,gamma
 
-plot(xPunti, yPunti, ".k", MarkerSize=15);
+graf2aPunti = plot(xPunti, yPunti, ".k", MarkerSize=15);
+
+legend( ...
+    [graf2a1, graf2a2, graf2a3, graf2a4, graf2aPunti], ...
+    {"Polinomio interpolatore definito a tratti $p_{2}(T)$", "Polinomio interpolatore su tutti i punti $p_{6}(T)$", ...
+    "Spline lineare $p_{1}(T)$", "Polinomio con vincoli di passaggio", "Punti nodali"}, ...
+    Location= 'best', ...
+    Interpreter= 'latex' ...
+);
+
+title({"Grafico 2A", "Vari polinomi che approssimano $V(T)$"}, Interpreter='latex');
+xlabel("$T$", Interpreter="latex");
 
 ylim([1.25 2.5]);
 grid on; grid minor;
